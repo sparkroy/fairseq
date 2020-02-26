@@ -143,7 +143,11 @@ def should_stop_early(args, valid_loss):
 
 
 def tpu_data_loader(args, itr):
+    import torch_xla.core.xla_model as xm
     import torch_xla.distributed.parallel_loader as pl
+    xm.rendezvous('tpu_data_loader')  # wait for all workers
+    xm.mark_step()
+    logger.warning('rank {}: init data_loader'.format(args.distributed_rank))
     device = utils.get_tpu_device(args)
     itr_len = len(itr)
     itr = pl.ParallelLoader(itr, [device]).per_device_loader(device)
