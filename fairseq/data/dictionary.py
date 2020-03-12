@@ -21,7 +21,7 @@ class Dictionary(object):
         self,
         pad="<pad>",
         eos="</s>",
-        unk="<unk>",
+        unk="[UNK]",
         bos="<s>",
         extra_special_symbols=None,
     ):

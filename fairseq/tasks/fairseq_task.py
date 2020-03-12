@@ -151,6 +151,7 @@ class FairseqTask(object):
         # For default fairseq task, return same iterator across epochs
         # as datasets are not dynamic, can be overridden in task specific
         # setting.
+        #print('\n\nDS',dataset)
         if dataset in self.dataset_to_epoch_iter:
             return self.dataset_to_epoch_iter[dataset]
 
@@ -332,12 +333,15 @@ class FairseqTask(object):
                   gradient
                 - logging outputs to display while training
         """
+        #print("TASK: Train step...\n")
         model.train()
         model.set_num_updates(update_num)
         loss, sample_size, logging_output = criterion(model, sample)
+        #print(logging_output)
         if ignore_grad:
             loss *= 0
         optimizer.backward(loss)
+        #print("\nTASK: Train step finished...")
         return loss, sample_size, logging_output
 
     def valid_step(self, sample, model, criterion):

@@ -96,6 +96,7 @@ def main(args, init_distributed=False):
         )
         and trainer.get_num_updates() < max_update
     ):
+        #print('\n\nTRAIN EPOCH ITER',epoch_itr)
         # train for one epoch
         train(args, trainer, task, epoch_itr)
 
@@ -146,16 +147,19 @@ def should_stop_early(args, valid_loss):
 def train(args, trainer, task, epoch_itr):
     """Train the model for one epoch."""
     # Initialize data iterator
+    #print("\n\nTRAIN ITER",epoch_itr)
     itr = epoch_itr.next_epoch_itr(
         fix_batches_to_gpus=args.fix_batches_to_gpus,
         shuffle=(epoch_itr.epoch >= args.curriculum),
     )
+    
     update_freq = (
         args.update_freq[epoch_itr.epoch - 1]
         if epoch_itr.epoch <= len(args.update_freq)
         else args.update_freq[-1]
     )
     itr = iterators.GroupedIterator(itr, update_freq)
+    
     progress = progress_bar.progress_bar(
         itr,
         log_format=args.log_format,
@@ -173,6 +177,7 @@ def train(args, trainer, task, epoch_itr):
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
     for samples in progress:
+        #print('\n\n\nTRAIN SAMPLES',samples)
         log_output = trainer.train_step(samples)
         num_updates = trainer.get_num_updates()
         if log_output is None:
@@ -315,6 +320,7 @@ def cli_main(modify_parser=None):
         )
     else:
         # single GPU training
+        #print('\n\n',args,'\n\n')
         main(args)
 
 

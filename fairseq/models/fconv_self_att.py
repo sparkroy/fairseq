@@ -2,6 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+import inspect
 
 import logging
 import math
@@ -140,6 +141,7 @@ class FConvModelSelfAtt(FairseqEncoderDecoderModel):
             attention_nheads=args.encoder_attention_nheads
         )
 
+
         decoder = FConvDecoder(
             task.target_dictionary,
             embed_dim=args.decoder_embed_dim,
@@ -178,6 +180,8 @@ class FConvEncoder(FairseqEncoder):
         self.num_attention_layers = None
 
         num_embeddings = len(dictionary)
+        #print(dictionary,"\n:encoder dict")
+        #print(inspect.getmodule(dictionary),'\n\n')
         self.padding_idx = dictionary.pad()
         self.embed_tokens = Embedding(num_embeddings, embed_dim, self.padding_idx)
         self.embed_positions = PositionalEmbedding(
@@ -217,53 +221,68 @@ class FConvEncoder(FairseqEncoder):
 
     def forward(self, src_tokens, src_lengths):
         # embed tokens and positions
+        #print("\nencoder forward start...")
+        #print(src_tokens.shape, src_lengths)
         x = self.embed_tokens(src_tokens) + self.embed_positions(src_tokens)
+        #print('embedded',x.shape)
         x = F.dropout(x, p=self.dropout, training=self.training)
         input_embedding = x.transpose(0, 1)
 
         # project to size of convolution
         x = self.fc1(x)
+        #print(x.shape)
 
         encoder_padding_mask = src_tokens.eq(self.padding_idx).t()  # -> T x B
         if not encoder_padding_mask.any():
             encoder_padding_mask = None
-
+            
+        #print(x.shape)
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
-
+        #print(x.shape)
+        #print("start temporal conv..")
         # temporal convolutions
         for proj, conv, attention in zip(self.projections, self.convolutions, self.attention):
             residual = x if proj is None else proj(x)
 
             if encoder_padding_mask is not None:
                 x = x.masked_fill(encoder_padding_mask.unsqueeze(-1), 0)
-
+            #print(x.shape)
             x = F.dropout(x, p=self.dropout, training=self.training)
             padding_l = (conv.kernel_size[0] - 1) // 2
             padding_r = conv.kernel_size[0] // 2
+            #print(x.shape)
             x = F.pad(x, (0, 0, 0, 0, padding_l, padding_r))
+            #print(x.shape)
             x = conv(x)
+            #print(x.shape)
             x = F.glu(x, dim=2)
+            #print(x.shape)
             if attention is not None:
                 x = attention(x)
             x = (x + residual) * math.sqrt(0.5)
+            #print(x.shape)
+        #print("end temporal conv")
 
         # T x B x C -> B x T x C
         x = x.transpose(1, 0)
+        #print(x.shape)
 
         # project back to size of embedding
         x = self.fc2(x)
+        #print(x.shape)
 
         if encoder_padding_mask is not None:
             encoder_padding_mask = encoder_padding_mask.t()  # -> B x T
             x = x.masked_fill(encoder_padding_mask.unsqueeze(-1), 0)
-
+        #print(x.shape)
         # scale gradients (this only affects backward, not forward)
         x = GradMultiply.apply(x, 1.0 / (2.0 * self.num_attention_layers))
-
+        #print(x.shape)
         # add output to input embedding for attention
         y = (x + input_embedding.transpose(0, 1)) * math.sqrt(0.5)
-
+        #print('encoder_out',x.shape,y.shape)
+        
         return {
             'encoder_out': (x, y),
             'encoder_padding_mask': encoder_padding_mask,  # B x T
@@ -302,6 +321,7 @@ class FConvDecoder(FairseqDecoder):
         pretrained=False, trained_decoder=None,
     ):
         super().__init__(dictionary)
+        print(dictionary,"\n:decoder dict")
         self.register_buffer('version', torch.Tensor([2]))
         self.pretrained = pretrained
         self.pretrained_decoder = trained_decoder
@@ -409,18 +429,24 @@ class FConvDecoder(FairseqDecoder):
         positions = self.embed_positions(prev_output_tokens)
 
         # embed tokens and positions
+        #print("START forwarding...\n")
         x = self.embed_tokens(prev_output_tokens) + positions
+        #print(x.shape)
         x = F.dropout(x, p=self.dropout, training=self.training)
         target_embedding = x.transpose(0, 1)
+        #print(x.shape)
 
         # project to size of convolution
         x = self.fc1(x)
+        #print(x.shape)
 
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
+        #print(x.shape)
 
         # temporal convolutions
         avg_attn_scores = None
+        #print("\nloop begin")
         for proj, conv, attention, selfattention, attproj in zip(
             self.projections, self.convolutions, self.attention, self.selfattention, self.attproj
         ):
@@ -428,7 +454,9 @@ class FConvDecoder(FairseqDecoder):
 
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = conv(x)
+            #print(x.shape)
             x = F.glu(x, dim=2)
+            #print(x.shape)
 
             # attention
             if attention is not None:
@@ -445,15 +473,20 @@ class FConvDecoder(FairseqDecoder):
                 x = selfattention(x)
 
             x = (x + residual) * math.sqrt(0.5)
+        
+        #print("loop end\n")
 
         # T x B x C -> B x T x C
         x = x.transpose(0, 1)
+        #print(x.shape)
 
         # project back to size of vocabulary
         x = self.fc2(x)
+        #print(x.shape)
         x = F.dropout(x, p=self.dropout, training=self.training)
         if not self.pretrained:
             x = self.fc3(x)
+            #print(x.shape)
 
         # fusion gating
         if self.pretrained:
@@ -468,6 +501,7 @@ class FConvDecoder(FairseqDecoder):
             fusion_output = self.fc3(fusion)
             return fusion_output, avg_attn_scores
         else:
+            #print('\ndecoded',x.shape)
             return x, avg_attn_scores
 
     def max_positions(self):
@@ -550,6 +584,7 @@ def ConvTBC(in_channels, out_channels, kernel_size, dropout=0, **kwargs):
 
 @register_model_architecture('fconv_self_att', 'fconv_self_att')
 def base_architecture(args):
+    #print("\n\n\nbase_architecture\n\n\n")
     args.dropout = getattr(args, 'dropout', 0.1)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
     args.encoder_layers = getattr(args, 'encoder_layers', '[(512, 3)] * 3')
@@ -571,6 +606,7 @@ def base_architecture(args):
 
 @register_model_architecture('fconv_self_att', 'fconv_self_att_wp')
 def fconv_self_att_wp(args):
+    #print("\n\n\nfconv_self_att_wp\n\n\n")
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 256)
     args.encoder_layers = getattr(args, 'encoder_layers', '[(128, 3)] * 2 + [(512,3)] * 1')
     args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 256)

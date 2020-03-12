@@ -310,6 +310,7 @@ class Trainer(object):
             try:
                 with maybe_no_sync():
                     # forward and backward
+                    #print('\n\nTRAINER: before train step...')
                     loss, sample_size_i, logging_output = self.task.train_step(
                         sample=sample,
                         model=self.model,
@@ -319,6 +320,7 @@ class Trainer(object):
                         ignore_grad=is_dummy_batch,
                     )
                     del loss
+                #print('TRAINER: AFTER train step...\n\n')
 
                 logging_outputs.append(logging_output)
                 if not is_dummy_batch:

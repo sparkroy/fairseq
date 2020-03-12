@@ -84,9 +84,11 @@ def collate(
         'net_input': {
             'src_tokens': src_tokens,
             'src_lengths': src_lengths,
+            'src_sentence':[s['src_sentence'] for s in samples],
         },
         'target': target,
     }
+    #print("\n\nBATCH",batch,'\n\n')
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
 
@@ -215,7 +217,10 @@ class LanguagePairDataset(FairseqDataset):
             'id': index,
             'source': src_item,
             'target': tgt_item,
+            'src_sentence':self.src_dict.string(src_item),
+            'tgt_sentence':self.tgt_dict.string(tgt_item),
         }
+        #print('\nEXAMPLE:',example,self.src_dict,'\n')
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
         return example
@@ -252,6 +257,7 @@ class LanguagePairDataset(FairseqDataset):
                   target sentence of shape `(bsz, tgt_len)`. Padding will appear
                   on the left if *left_pad_target* is ``True``.
         """
+        #print('\n\nDS SAMPLES:',samples,'FUCK\n\n')
         return collate(
             samples, pad_idx=self.src_dict.pad(), eos_idx=self.eos,
             left_pad_source=self.left_pad_source, left_pad_target=self.left_pad_target,

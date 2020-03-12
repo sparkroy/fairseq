@@ -4,10 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import torch
 
 from fairseq import metrics, utils
 from fairseq.criterions import FairseqCriterion, register_criterion
-
 
 def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=None, reduce=True):
     if target.dim() == lprobs.dim() - 1:
@@ -36,6 +36,9 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
     def __init__(self, args, task):
         super().__init__(args, task)
         self.eps = args.label_smoothing
+        self.src_dict = getattr(task, 'source_dictionary', None)
+        self.tgt_dict = getattr(task,'target_dictionary',None)
+        #self.align_dict = utils.load_align_dict(args.replace_unk)
 
     @staticmethod
     def add_args(parser):
@@ -53,7 +56,14 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        net_output = model(**sample['net_input'])
+        #print("\n\nLABEL SMOOTH CE:")
+        #print(sample['net_input'].keys())
+        #net_output = model(**sample['net_input'])
+        sample_input = sample['net_input']
+        net_output = model(sample_input['src_tokens'],sample_input['src_lengths'],sample_input['prev_output_tokens'])
+        ###!!!!sample['net_input']['src_sentence']
+        
+        #print(net_output,'\n')
         loss, nll_loss = self.compute_loss(model, net_output, sample, reduce=reduce)
         sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {
@@ -63,15 +73,34 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
             'nsentences': sample['target'].size(0),
             'sample_size': sample_size,
         }
+        #print("\nEND LABEL SMOOTH CE\n")
         return loss, sample_size, logging_output
 
     def compute_loss(self, model, net_output, sample, reduce=True):
         lprobs = model.get_normalized_probs(net_output, log_probs=True)
+        #print("\n\nCOMPUTING LOSS....")
+        #print(lprobs.shape)
+        '''
+        Predict the story and calculate coherence
+        '''
+        max_idx = torch.argmax(lprobs, -1)
+        
+        for sentence_token_indeces in max_idx:
+            #sentence_token_indeces = utils.strip_pad(sentence_token_indeces, self.tgt_dict.pad())
+            ###TODO: self.tgt_dict or self.src_dict?
+            ###REF: generate.py
+
+            print(self.tgt_dict.string(sentence_token_indeces, escape_unk=True))
+        
+        '''
+        '''
         lprobs = lprobs.view(-1, lprobs.size(-1))
+        #print(model.get_targets(sample, net_output).shape)
         target = model.get_targets(sample, net_output).view(-1, 1)
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
+        #print("COMPUTED LOSS!!\n\n")
         return loss, nll_loss
 
     @staticmethod
