@@ -197,9 +197,10 @@ class JsonProgressBar(BaseProgressBar):
         if tag is not None:
             self.stats = OrderedDict([(tag + '_' + k, v) for k, v in self.stats.items()])
         stats = self._format_stats(self.stats, epoch=self.epoch)
+        print(stats)
         with rename_logger(logger, tag):
             logger.info(json.dumps(stats))
-        print(stats)
+        
 
     def _format_stats(self, stats, epoch=None, update=None):
         postfix = OrderedDict()

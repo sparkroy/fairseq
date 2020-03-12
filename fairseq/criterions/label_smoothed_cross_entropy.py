@@ -90,7 +90,7 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
             ###TODO: self.tgt_dict or self.src_dict?
             ###REF: generate.py
 
-            print(self.tgt_dict.string(sentence_token_indeces, escape_unk=True))
+            print(self.src_dict.string(sentence_token_indeces, escape_unk=True))
         
         '''
         '''
