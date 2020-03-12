@@ -199,6 +199,7 @@ class JsonProgressBar(BaseProgressBar):
         stats = self._format_stats(self.stats, epoch=self.epoch)
         with rename_logger(logger, tag):
             logger.info(json.dumps(stats))
+        print(stats)
 
     def _format_stats(self, stats, epoch=None, update=None):
         postfix = OrderedDict()
